@@ -21,7 +21,7 @@ def test_health(client):
 
 
 def test_root_and_404_are_json(client):
-    assert client.get("/").get_json()["app"] == "Tiny Crap"
+    assert client.get("/").get_json()["app"] == "Mikaso"
     r = client.get("/nope")
     assert r.status_code == 404 and r.get_json()["ok"] is False
 
@@ -179,7 +179,7 @@ def test_rate_limit(make_client):
 
 def test_cleanup_removes_expired_jobs_and_files(make_client):
     client, app = make_client()
-    store = app.extensions["tinycrap"].store
+    store = app.extensions["mikaso"].store
     job_id = post(client, "/api/download/audio", {"url": YT, "format": "best"}).get_json()["job"]["job_id"]
     job, _ = wait_done(client, job_id)
     job_dir = store.cfg.temp_dir / job_id
@@ -202,8 +202,8 @@ def test_status_survives_across_worker_processes(make_client):
     client, app = make_client()
     job_id = post(client, "/api/download/audio", {"url": YT, "format": "best"}).get_json()["job"]["job_id"]
     wait_done(client, job_id)
-    from tinycrap.jobs import JobStore
-    other = JobStore(app.extensions["tinycrap"].cfg)
+    from mikaso.jobs import JobStore
+    other = JobStore(app.extensions["mikaso"].cfg)
     job = other.get(job_id)
     assert job is not None and job.stage == "ready"
     other.shutdown()

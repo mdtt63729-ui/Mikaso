@@ -1,8 +1,8 @@
 import pytest
 
-from tinycrap import Config
-from tinycrap.errors import ApiError
-from tinycrap.formats import normalize
+from mikaso import Config
+from mikaso.errors import ApiError
+from mikaso.formats import normalize
 
 CFG = Config()
 

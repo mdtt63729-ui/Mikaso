@@ -1,0 +1,130 @@
+name: Build APK
+
+# Builds the Android app in frontend/.
+#   * Every push to main (that touches the app) and every v* tag  -> UNSIGNED release APK
+#   * Manual run with "signed: true"                              -> SIGNED release APK (uses the 4 signing secrets)
+#
+# The unsigned job deliberately passes NO signing env vars, so Gradle emits
+# app-release-unsigned.apk. The signed job feeds the 4 secrets in and Gradle
+# signs automatically (see frontend/app/build.gradle.kts).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/build-apk.yml"
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      signed:
+        description: "Also build a SIGNED release APK (needs the 4 signing secrets)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # needed to attach the APK to a GitHub Release on a tag
+
+jobs:
+  unsigned:
+    name: Unsigned release APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" >/dev/null
+
+      - name: Build release (unsigned)
+        working-directory: frontend
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          find frontend/app/build/outputs/apk -name '*.apk' -exec cp -v {} out/ \;
+          ls -lh out
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikaso-unsigned-release-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+      - name: Attach APK to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+
+  signed:
+    name: Signed release APK
+    # Only when explicitly asked for from the Actions tab.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" >/dev/null
+
+      - name: Decode signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MIKASO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::MIKASO_KEYSTORE_BASE64 secret is not set. Run the 'Generate keystore' workflow first."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/mikaso-release.jks"
+
+      - name: Build release (signed)
+        working-directory: frontend
+        env:
+          MIKASO_KEYSTORE_FILE: ${{ runner.temp }}/mikaso-release.jks
+          MIKASO_STORE_PASSWORD: ${{ secrets.MIKASO_STORE_PASSWORD }}
+          MIKASO_KEY_ALIAS: ${{ secrets.MIKASO_KEY_ALIAS }}
+          MIKASO_KEY_PASSWORD: ${{ secrets.MIKASO_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          find frontend/app/build/outputs/apk -name '*.apk' -exec cp -v {} out/ \;
+          ls -lh out
+
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikaso-signed-release-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+      - name: Attach signed APK to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk

@@ -1,6 +1,6 @@
 """Stand-in for ``python -m yt_dlp`` used by the tests (no network needed).
 
-Understands the subset of options Tiny Crap passes. ``--fake-mode`` picks a
+Understands the subset of options Mikaso passes. ``--fake-mode`` picks a
 behaviour: ok (default) | private | slow | huge.
 """
 import json

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tiny Crap backend: single entry point.
+"""Mikaso backend: single entry point.
 
     python server.py                      # http://127.0.0.1:8000
     python server.py --host 0.0.0.0       # reachable from a phone on the same Wi-Fi
@@ -12,7 +12,7 @@ import argparse
 import os
 import socket
 
-from tinycrap import APP_NAME, APP_VERSION, create_app
+from mikaso import APP_NAME, APP_VERSION, create_app
 
 app = create_app()
 application = app  # WSGI servers look for this name
@@ -43,7 +43,7 @@ def main() -> None:
         print("  (use --host 0.0.0.0 to reach it from a real phone)")
     print(f"  Health check:      /api/health")
     print(f"  Admin panel:       http://127.0.0.1:{args.port}/admin   (user: admin)")
-    print(f"  Admin password:    {app.extensions['tinycrap'].admin_password}\n")
+    print(f"  Admin password:    {app.extensions['mikaso'].admin_password}\n")
 
     if args.debug:
         app.run(host=args.host, port=args.port, debug=True, use_reloader=False)

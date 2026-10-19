@@ -1,7 +1,7 @@
 import pytest
 
-from tinycrap.errors import ApiError
-from tinycrap.validation import validate_url
+from mikaso.errors import ApiError
+from mikaso.validation import validate_url
 
 
 @pytest.mark.parametrize("url,platform", [

@@ -7,12 +7,12 @@ import time
 import pytest
 
 from conftest import FAKE
-from tinycrap import Config
-from tinycrap.jobs import JobStore, SlotPool
-from tinycrap.registry import Registry
+from mikaso import Config
+from mikaso.jobs import JobStore, SlotPool
+from mikaso.registry import Registry
 
 YT = "https://www.youtube.com/watch?v=abc123"
-H = {"X-Requested-With": "tinycrap"}
+H = {"X-Requested-With": "mikaso"}
 
 
 def start(client, n=1, kind="video", **kw):
@@ -46,7 +46,7 @@ def test_only_two_run_the_rest_wait_in_order(make_client):
     states = [job(client, i) for i in ids]
     assert [s["queue_position"] for s in states] == [0, 0, 1, 2, 3]
     assert states[2]["message"].startswith("Waiting")
-    assert app.extensions["tinycrap"].store.queue_stats()["running"] == 2
+    assert app.extensions["mikaso"].store.queue_stats()["running"] == 2
 
 
 def test_next_job_starts_when_a_place_frees_up(make_client):
@@ -114,7 +114,7 @@ def test_stale_place_is_reclaimed(tmp_path):
 def test_same_link_is_read_once(make_client, tmp_path):
     counter = tmp_path / "calls.txt"
     client, app = make_client(ytdlp_cmd=(sys.executable, FAKE, "--fake-mode", "ok"))
-    analyzer = app.extensions["tinycrap"].analyzer
+    analyzer = app.extensions["mikaso"].analyzer
     real, calls = analyzer._run, [0]
 
     def counting(url):
@@ -131,7 +131,7 @@ def test_same_link_is_read_once(make_client, tmp_path):
 # -- admin -------------------------------------------------------------------------------
 
 def auth(app):
-    pw = app.extensions["tinycrap"].admin_password
+    pw = app.extensions["mikaso"].admin_password
     return {"Authorization": "Basic " + base64.b64encode(f"admin:{pw}".encode()).decode()}
 
 
@@ -140,7 +140,7 @@ def test_admin_needs_password(make_client):
     assert client.get("/admin/").status_code == 401
     assert client.get("/admin/api/overview", headers={"Authorization": "Basic " + base64.b64encode(b"admin:nope").decode()}).status_code == 401
     ok = client.get("/admin/", headers=auth(app))
-    assert ok.status_code == 200 and b"Tiny Crap" in ok.data
+    assert ok.status_code == 200 and b"Mikaso" in ok.data
 
 
 def test_admin_blocks_writes_without_header(make_client):
@@ -166,7 +166,7 @@ def test_env_password_is_used(make_client):
 def test_overview_has_everything(make_client):
     client, app = make_client(mode="slow", max_concurrent_jobs=1)
     start(client, 2)
-    until(lambda: app.extensions["tinycrap"].store.queue_stats()["running"] == 1)
+    until(lambda: app.extensions["mikaso"].store.queue_stats()["running"] == 1)
     d = client.get("/admin/api/overview", headers=auth(app)).get_json()
     assert d["app"]["status"] in ("ok", "degraded") and d["limits"]["concurrent"] == 1
     assert d["stats"]["started"] == 2
@@ -178,7 +178,7 @@ def test_lifetime_counters_survive_restart(make_client, cfg):
     client, app = make_client()
     (jid,) = start(client, 1, kind="audio")
     assert until(lambda: job(client, jid)["stage"] == "ready")
-    s = Registry(app.extensions["tinycrap"].cfg).stats()
+    s = Registry(app.extensions["mikaso"].cfg).stats()
     assert s["completed"] == 1 and s["started"] == 1 and s["bytes"] > 0 and s["platforms"] == {"youtube": 1}
 
 

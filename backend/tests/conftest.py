@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from tinycrap import Config, create_app  # noqa: E402
+from mikaso import Config, create_app  # noqa: E402
 
 FAKE = str(Path(__file__).with_name("fake_ytdlp.py"))
 
@@ -38,7 +38,7 @@ def make_client(cfg):
 
     yield _make
     for app in created:
-        app.extensions["tinycrap"].store.shutdown()
+        app.extensions["mikaso"].store.shutdown()
 
 
 @pytest.fixture()
