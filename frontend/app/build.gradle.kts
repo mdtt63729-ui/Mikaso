@@ -116,6 +116,7 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    implementation(libs.androidx.documentfile)   // saving into a folder the user picked (SAF)
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
 }
