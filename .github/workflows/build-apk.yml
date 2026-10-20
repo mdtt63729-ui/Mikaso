@@ -40,9 +40,14 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default package list starts with "tools", which Google removed
+          # from the SDK repository (sdkmanager fails with "Failed to find package 'tools'"
+          # and the whole step aborts). Ask for platform-tools only; the rest is installed below.
+          packages: "platform-tools"
 
       - name: Install SDK packages
-        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" >/dev/null
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
 
       - name: Build release (unsigned)
         working-directory: frontend
@@ -85,9 +90,14 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default package list starts with "tools", which Google removed
+          # from the SDK repository (sdkmanager fails with "Failed to find package 'tools'"
+          # and the whole step aborts). Ask for platform-tools only; the rest is installed below.
+          packages: "platform-tools"
 
       - name: Install SDK packages
-        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" >/dev/null
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
 
       - name: Decode signing keystore
         env:
