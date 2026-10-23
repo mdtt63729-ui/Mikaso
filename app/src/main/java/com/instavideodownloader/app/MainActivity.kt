@@ -81,8 +81,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
+        executor.execute { prepareFfmpeg() }
         val sharedUrl = if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty() else ""
         setContent { DownloaderTheme { DownloaderApp(sharedUrl = sharedUrl, activity = this) } }
+    }
+
+    /** Expose the bundled ffmpeg/ffprobe binaries to yt-dlp. Idempotent. */
+    private fun prepareFfmpeg() {
+        try {
+            Python.getInstance().getModule("bridge").callAttr(
+                "prepare_ffmpeg",
+                applicationInfo.nativeLibraryDir,
+                File(filesDir, "ffmpeg").absolutePath
+            )
+        } catch (_: Exception) {
+        }
     }
 
     fun saveToDownloads(source: File): Uri? {
@@ -221,6 +234,7 @@ private fun DownloaderApp(sharedUrl: String, activity: MainActivity) {
                     progress = initial; downloads = listOf(initial) + downloads
                     screen = "Downloads"
                     scope.launch {
+                        prepareFfmpeg()
                         val py = Python.getInstance().getModule("bridge")
                         var finished = false
                         val worker = java.util.concurrent.FutureTask<String> { py.callAttr("start_download", video.url, selectedFormat, outDir.absolutePath, jobId, when (selectedType) { "Audio only" -> "audio"; "Video only" -> "video"; else -> "video_audio" }).toString() }
@@ -316,7 +330,7 @@ private fun DownloaderApp(sharedUrl: String, activity: MainActivity) {
                 val label = if (f.height > 0) "${f.height}p" else f.resolution
                 SelectableRow("$label · ${f.ext.uppercase()}", "${if (f.hasAudio) "Audio included" else "Separate audio may be needed"} · ${if (f.size > 0) formatBytes(f.size) else "Size unknown"}${if (f.note.isNotBlank()) " · ${f.note}" else ""}", selected == f.id) { onSelected(f.id) }
             }
-            item { Text("Tip: the app lists formats yt-dlp reports for this URL. Combining separate streams may require FFmpeg; this build does not bundle FFmpeg.", color = TextMuted, fontSize = 11.sp) }
+            item { Text("Tip: the app lists formats yt-dlp reports for this URL. Separate video/audio streams are merged automatically using the bundled FFmpeg.", color = TextMuted, fontSize = 11.sp) }
         }
         item { Button(onClick = onDownload, enabled = info != null && selected.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text(if (busy) "Download in progress…" else "Download selected format") } }
     }

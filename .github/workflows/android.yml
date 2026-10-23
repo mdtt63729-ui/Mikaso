@@ -11,9 +11,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+      NDK_VERSION: r27c
+      FFMPEG_VERSION: n7.1.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +34,34 @@ jobs:
           echo "Using build Python: $PY"
           "$PY" --version
           echo "BUILD_PYTHON=$PY" >> "$GITHUB_ENV"
+      - name: Cache NDK and FFmpeg source
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/ndk.zip
+            /tmp/ffsrc
+          key: ffmpeg-${{ env.FFMPEG_VERSION }}-ndk-${{ env.NDK_VERSION }}
+      - name: Build FFmpeg for Android arm64
+        run: |
+          set -euo pipefail
+          if [ ! -f /tmp/ndk.zip ]; then
+            curl -sL -o /tmp/ndk.zip "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+          fi
+          rm -rf /tmp/ndk && mkdir -p /tmp/ndk
+          unzip -q /tmp/ndk.zip -d /tmp/ndk
+          if [ ! -d "/tmp/ffsrc/FFmpeg-${FFMPEG_VERSION}" ]; then
+            mkdir -p /tmp/ffsrc
+            curl -sL -o /tmp/ff.tar.gz "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_VERSION}.tar.gz"
+            tar -xzf /tmp/ff.tar.gz -C /tmp/ffsrc
+          fi
+          NDK_DIR="/tmp/ndk/android-ndk-${NDK_VERSION}" \
+          FFMPEG_SRC="/tmp/ffsrc/FFmpeg-${FFMPEG_VERSION}" \
+            bash scripts/build-ffmpeg-android.sh
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp "/tmp/ffsrc/FFmpeg-${FFMPEG_VERSION}/ffmpeg"  app/src/main/jniLibs/arm64-v8a/libffmpeg.so
+          cp "/tmp/ffsrc/FFmpeg-${FFMPEG_VERSION}/ffprobe" app/src/main/jniLibs/arm64-v8a/libffprobe.so
+          file app/src/main/jniLibs/arm64-v8a/*.so
+          ls -la app/src/main/jniLibs/arm64-v8a/
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:

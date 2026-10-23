@@ -11,6 +11,51 @@ import yt_dlp
 _lock = threading.Lock()
 _jobs = {}
 
+# Directory containing executables named "ffmpeg" and "ffprobe". Set by
+# prepare_ffmpeg(); None means yt-dlp falls back to searching PATH.
+_FFMPEG_DIR = None
+
+
+def prepare_ffmpeg(native_lib_dir, work_dir):
+    """Expose the bundled ffmpeg/ffprobe to yt-dlp.
+
+    The binaries are shipped in the APK as libffmpeg.so / libffprobe.so and
+    Android extracts them into the app's native library directory, which is the
+    only location an app may execute its own binaries on recent Android. yt-dlp
+    looks for files literally named "ffmpeg" and "ffprobe", so we create those
+    names as symlinks (falling back to copies) inside a writable directory.
+    """
+    global _FFMPEG_DIR
+    try:
+        os.makedirs(work_dir, exist_ok=True)
+        found = False
+        for name in ('ffmpeg', 'ffprobe'):
+            src = os.path.join(native_lib_dir, 'lib' + name + '.so')
+            dst = os.path.join(work_dir, name)
+            if not os.path.exists(src):
+                continue
+            found = True
+            try:
+                if os.path.islink(dst) or os.path.exists(dst):
+                    os.remove(dst)
+            except Exception:
+                pass
+            try:
+                os.symlink(src, dst)
+            except Exception:
+                import shutil
+                shutil.copy2(src, dst)
+                os.chmod(dst, 0o755)
+        _FFMPEG_DIR = work_dir if found else None
+        return _FFMPEG_DIR
+    except Exception:
+        _FFMPEG_DIR = None
+        return None
+
+
+def _ffmpeg_opts():
+    return {'ffmpeg_location': _FFMPEG_DIR} if _FFMPEG_DIR else {}
+
 
 def _safe_title(value):
     value = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', value or 'video')
@@ -59,6 +104,7 @@ def extract_info(url):
         'noplaylist': True, 'ignoreerrors': False,
         'socket_timeout': 20, 'retries': 2,
     }
+    opts.update(_ffmpeg_opts())
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -112,10 +158,12 @@ def start_download(url, format_id, output_dir, job_id, mode='video_audio'):
         'progress_hooks': [_progress_hook(job_id)], 'retries': 3,
         'fragment_retries': 3, 'continuedl': True, 'overwrites': False,
         'socket_timeout': 20, 'windowsfilenames': True,
-        # Avoid requiring a separately bundled FFmpeg binary in v1. Select a
-        # combined A/V format for the default path when the site provides one.
+        # Merge separate video/audio streams into one file. Many sites
+        # (including YouTube) only offer DASH streams, so this is required.
+        'merge_output_format': 'mp4',
         'format_sort': ['res', 'ext:mp4:m4a'],
     }
+    opts.update(_ffmpeg_opts())
     _write_progress(job_id, {'status': 'starting', 'percent': 0, 'message': 'Starting download'})
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
