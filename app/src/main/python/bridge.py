@@ -142,16 +142,18 @@ def extract_info(url):
         return json.dumps({'ok': False, 'error': message[:500], 'trace': traceback.format_exc()[-1200:]})
 
 
-def start_download(url, format_id, output_dir, job_id, mode='video_audio'):
-    """Download to app-private external files. UI polls get_progress(job_id)."""
+def start_download(url, format_selector, output_dir, job_id, mode='video_audio'):
+    """Download to app-private external files. UI polls get_progress(job_id).
+
+    format_selector is a full yt-dlp format selector, e.g. "137+bestaudio" to
+    merge a video-only stream with the best audio stream, or "" to use the
+    default for the given mode.
+    """
     os.makedirs(output_dir, exist_ok=True)
     output_template = os.path.join(output_dir, '%(extractor)s_%(title).120B_%(id)s.%(ext)s')
-    if mode == 'audio':
-        selector = format_id or 'bestaudio/best'
-    elif mode == 'video':
-        selector = format_id or 'bestvideo/best'
-    else:
-        selector = format_id or 'best[acodec!=none][vcodec!=none]/best'
+    selector = (format_selector or '').strip()
+    if not selector:
+        selector = {'audio': 'bestaudio/best', 'video': 'bestvideo/best'}.get(mode, 'bv*+ba/b')
     opts = {
         'quiet': True, 'no_warnings': True, 'noplaylist': True,
         'format': selector, 'outtmpl': output_template,

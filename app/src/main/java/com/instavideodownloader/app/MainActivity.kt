@@ -218,13 +218,13 @@ private fun DownloaderApp(sharedUrl: String, activity: MainActivity) {
                                 val array = response.optJSONArray("formats") ?: JSONArray()
                                 val formats = (0 until array.length()).mapNotNull { i -> array.optJSONObject(i)?.let { f -> VideoFormat(f.optString("format_id"), f.optString("ext", "mp4"), f.optString("resolution", "Unknown"), f.optInt("height"), f.optLong("filesize"), f.optBoolean("has_video"), f.optBoolean("has_audio"), f.optString("note")) } }
                                 info = VideoInfo(response.optString("title"), response.optString("description"), response.optInt("duration"), response.optString("thumbnail"), response.optString("extractor"), response.optString("webpage_url", requestUrl), response.optString("id"), formats)
-                                selectedFormat = formats.firstOrNull { it.hasVideo && it.hasAudio }?.id ?: formats.firstOrNull()?.id.orEmpty()
+                                selectedFormat = formats.firstOrNull { it.hasVideo }?.id ?: formats.firstOrNull()?.id.orEmpty()
                                 screen = "Format Picker"
                             } else error = response.optString("error", "Could not fetch this URL")
                         }
                     }
                 }, onOpenDownloads = { screen = "Downloads" })
-                "Format Picker" -> FormatScreen(info, fetching, selectedType, { selectedType = it; selectedFormat = info?.formats?.firstOrNull { f -> when (it) { "Audio only" -> !f.hasVideo && f.hasAudio; "Video only" -> f.hasVideo; else -> f.hasVideo && f.hasAudio } }?.id.orEmpty() }, selectedFormat, { selectedFormat = it }, onDownload = {
+                "Format Picker" -> FormatScreen(info, fetching, selectedType, { selectedType = it; selectedFormat = info?.formats?.firstOrNull { f -> when (it) { "Audio only" -> f.hasAudio && !f.hasVideo; "Video only" -> f.hasVideo && !f.hasAudio; else -> f.hasVideo } }?.id.orEmpty() }, selectedFormat, { selectedFormat = it }, onDownload = {
                     val video = info ?: return@FormatScreen
                     if (downloading) return@FormatScreen
                     downloading = true; error = ""; notice = ""
@@ -237,7 +237,16 @@ private fun DownloaderApp(sharedUrl: String, activity: MainActivity) {
                         activity.prepareFfmpeg()
                         val py = Python.getInstance().getModule("bridge")
                         var finished = false
-                        val worker = java.util.concurrent.FutureTask<String> { py.callAttr("start_download", video.url, selectedFormat, outDir.absolutePath, jobId, when (selectedType) { "Audio only" -> "audio"; "Video only" -> "video"; else -> "video_audio" }).toString() }
+                        // Build a full yt-dlp format selector. "Video + Audio" merges the
+                        // chosen video stream with the best audio stream when the site
+                        // offers them separately (which YouTube and Instagram do).
+                        val chosen = video.formats.firstOrNull { it.id == selectedFormat }
+                        val selector = when (selectedType) {
+                            "Audio only" -> selectedFormat.ifBlank { "bestaudio/best" }
+                            "Video only" -> selectedFormat.ifBlank { "bestvideo/best" }
+                            else -> if (selectedFormat.isBlank()) "bv*+ba/b" else if (chosen?.hasAudio == true) selectedFormat else "$selectedFormat+bestaudio"
+                        }
+                        val worker = java.util.concurrent.FutureTask<String> { py.callAttr("start_download", video.url, selector, outDir.absolutePath, jobId, when (selectedType) { "Audio only" -> "audio"; "Video only" -> "video"; else -> "video_audio" }).toString() }
                         executor.execute(worker)
                         while (!worker.isDone) {
                             delay(550)
@@ -319,20 +328,20 @@ private fun DownloaderApp(sharedUrl: String, activity: MainActivity) {
             }
         }
         item { Text("Download type", color = TextMain, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
-        item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { listOf("Video + Audio", "Video only", "Audio only").forEach { option -> SelectableRow(option, when (option) { "Audio only" -> "Audio stream where available"; "Video only" -> "Video without audio"; else -> "Prefer a combined audio/video format" }, type == option) { onType(option) } } } }
+        item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { listOf("Video + Audio", "Video only", "Audio only").forEach { option -> SelectableRow(option, when (option) { "Audio only" -> "Audio stream where available"; "Video only" -> "Video without audio"; else -> "Best video, audio merged automatically" }, type == option) { onType(option) } } } }
         item { Text("Available quality", color = TextMain, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
         if (info == null) item { SkeletonBar(Modifier.fillMaxWidth(), 56) }
         else {
-            val eligible = info.formats.filter { f -> when (type) { "Audio only" -> !f.hasVideo && f.hasAudio; "Video only" -> f.hasVideo; else -> f.hasVideo && f.hasAudio } }
+            val eligible = info.formats.filter { f -> when (type) { "Audio only" -> f.hasAudio && !f.hasVideo; "Video only" -> f.hasVideo && !f.hasAudio; else -> f.hasVideo } }
             val unique = eligible.distinctBy { if (it.height > 0) "${it.height}p" else "${it.resolution}-${it.ext}" }.take(16)
             if (unique.isEmpty()) item { EmptyPanel("No matching format found", "Try another download type or use Best available.", Icons.Default.Info) }
             items(unique, key = { it.id }) { f ->
                 val label = if (f.height > 0) "${f.height}p" else f.resolution
-                SelectableRow("$label · ${f.ext.uppercase()}", "${if (f.hasAudio) "Audio included" else "Separate audio may be needed"} · ${if (f.size > 0) formatBytes(f.size) else "Size unknown"}${if (f.note.isNotBlank()) " · ${f.note}" else ""}", selected == f.id) { onSelected(f.id) }
+                SelectableRow("$label · ${f.ext.uppercase()}", "${if (f.hasAudio) "Audio included" else "Best audio will be merged"} · ${if (f.size > 0) formatBytes(f.size) else "Size unknown"}${if (f.note.isNotBlank()) " · ${f.note}" else ""}", selected == f.id) { onSelected(f.id) }
             }
             item { Text("Tip: the app lists formats yt-dlp reports for this URL. Separate video/audio streams are merged automatically using the bundled FFmpeg.", color = TextMuted, fontSize = 11.sp) }
         }
-        item { Button(onClick = onDownload, enabled = info != null && selected.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text(if (busy) "Download in progress…" else "Download selected format") } }
+        item { Button(onClick = onDownload, enabled = info != null && !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text(if (busy) "Download in progress…" else "Download selected format") } }
     }
 }
 
