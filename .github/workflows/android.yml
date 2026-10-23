@@ -85,6 +85,8 @@ jobs:
           BYTES=$(stat -c%s "$APK")
           MIB=$(awk "BEGIN{printf \"%.1f\", $BYTES/1048576}")
           echo "Release APK: $BYTES bytes ($MIB MiB)"
+          echo "Native libs packaged in APK:"
+          unzip -l "$APK" | grep -E 'lib/arm64-v8a/' || true
           {
             echo "### Release APK size"
             echo ""
