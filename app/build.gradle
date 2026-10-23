@@ -55,7 +55,9 @@ android {
 chaquopy {
     defaultConfig {
         version = '3.11'
-        buildPython '3.11'
+        // The interpreter used to run the build. CI passes an absolute path
+        // (BUILD_PYTHON); locally it falls back to the python3.11 command.
+        buildPython(System.getenv('BUILD_PYTHON') ?: 'python3.11')
         pip { install 'yt-dlp' }
     }
 }

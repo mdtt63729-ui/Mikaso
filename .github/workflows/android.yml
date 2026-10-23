@@ -26,6 +26,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Select build Python interpreter
+        run: |
+          PY="$(command -v python3.11 || command -v python3 || command -v python)"
+          echo "Using build Python: $PY"
+          "$PY" --version
+          echo "BUILD_PYTHON=$PY" >> "$GITHUB_ENV"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -41,7 +47,8 @@ jobs:
       - name: Verify APK signature
         run: |
           APK=app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --print-certs "$APK"
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK"
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
