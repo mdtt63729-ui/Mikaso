@@ -49,6 +49,17 @@ jobs:
           APK=app/build/outputs/apk/release/app-release.apk
           BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK"
+      - name: Report APK size
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          BYTES=$(stat -c%s "$APK")
+          MIB=$(awk "BEGIN{printf \"%.1f\", $BYTES/1048576}")
+          echo "Release APK: $BYTES bytes ($MIB MiB)"
+          {
+            echo "### Release APK size"
+            echo ""
+            echo "- $BYTES bytes ($MIB MiB)"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
