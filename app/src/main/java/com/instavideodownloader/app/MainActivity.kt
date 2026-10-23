@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Expose the bundled ffmpeg/ffprobe binaries to yt-dlp. Idempotent. */
-    private fun prepareFfmpeg() {
+    fun prepareFfmpeg() {
         try {
             Python.getInstance().getModule("bridge").callAttr(
                 "prepare_ffmpeg",
@@ -234,7 +234,7 @@ private fun DownloaderApp(sharedUrl: String, activity: MainActivity) {
                     progress = initial; downloads = listOf(initial) + downloads
                     screen = "Downloads"
                     scope.launch {
-                        prepareFfmpeg()
+                        activity.prepareFfmpeg()
                         val py = Python.getInstance().getModule("bridge")
                         var finished = false
                         val worker = java.util.concurrent.FutureTask<String> { py.callAttr("start_download", video.url, selectedFormat, outDir.absolutePath, jobId, when (selectedType) { "Audio only" -> "audio"; "Video only" -> "video"; else -> "video_audio" }).toString() }
